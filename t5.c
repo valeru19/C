@@ -2,110 +2,133 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-// Структура для представления узла в стеке
-struct Node {
-    int data;            // Значение узла
-    struct Node* next;   // Указатель на следующий узел
+// Структура для представления элемента стека
+struct StackNode {
+    double data;
+    struct StackNode* next;
 };
 
 // Структура для представления стека
 struct Stack {
-    struct Node* top;   // Указатель на вершину стека
+    struct StackNode* top;
 };
 
-// Функция для создания нового узла с заданным значением
-struct Node* createNode(int data) {
-    struct Node* newNode = (struct Node*)malloc(sizeof(struct Node));
+// Функция для инициализации стека
+void initializeStack(struct Stack* stack) {
+    stack->top = NULL;
+}
+
+// Функция для проверки, пуст ли стек
+int isStackEmpty(struct Stack* stack) {
+    return (stack->top == NULL);
+}
+
+// Функция для добавления значения в стек
+void push(struct Stack* stack, double value) {
+    // Создаем новый узел
+    struct StackNode* newNode = (struct StackNode*)malloc(sizeof(struct StackNode));
     if (newNode == NULL) {
-        printf("Error of getting memory for node\n");
+        // Обработка ошибки выделения памяти
+        printf("Ошибка: Не удалось выделить память для нового элемента стека\n");
         exit(EXIT_FAILURE);
     }
-    newNode->data = data;
-    newNode->next = NULL;
-    return newNode;
-}
 
-// Функция для создания нового стека
-struct Stack* createStack() {
-    struct Stack* newStack = (struct Stack*)malloc(sizeof(struct Stack));
-    if (newStack == NULL) {
-        printf("Error of getting memory for stack\n");
-        exit(EXIT_FAILURE);
-    }
-    newStack->top = NULL;
-    return newStack;
-}
-
-// Функция для добавления нового элемента в стек
-void push(struct Stack* stack, int data) {
-    struct Node* newNode = createNode(data);
+    // Заполняем новый узел данными
+    newNode->data = value;
     newNode->next = stack->top;
+
+    // Обновляем указатель на верхний элемент стека
     stack->top = newNode;
 }
 
-// Функция для извлечения и удаления элемента из стека
-int pop(struct Stack* stack) {
-    if (stack->top == NULL) {
-        printf("Stack is empty, can't use pop\n");
+// Функция для извлечения значения из стека
+double pop(struct Stack* stack) {
+    if (isStackEmpty(stack)) {
+        // Обработка ошибки: стек пуст
+        printf("Ошибка: Стек пуст, невозможно выполнить извлечение\n");
         exit(EXIT_FAILURE);
     }
-    struct Node* temp = stack->top;
-    int data = temp->data;
-    stack->top = temp->next;
+
+    // Получаем значение верхнего элемента стека
+    double value = stack->top->data;
+
+    // Удаляем верхний элемент и обновляем указатель на верхний элемент
+    struct StackNode* temp = stack->top;
+    stack->top = stack->top->next;
     free(temp);
-    return data;
+
+    return value;
 }
 
-int main(int argc, char const *argv[]) {
-    // Открытие файла для чтения
-    FILE* file = fopen(argv[1], "r");
+// Функция для вычисления значения постфиксного выражения
+double evaluatePostfixExpression(FILE* inputFile) {
+    struct Stack operandStack;
+    initializeStack(&operandStack);
 
-    if (file == NULL) {
-        printf("Error opening the file\n");
-        return -1;
-    }
+    char buffer[100];
+    while (fscanf(inputFile, "%s", buffer) != EOF) {
+        if (isdigit(buffer[0]) || (buffer[0] == '-' && isdigit(buffer[1]))) {
+            // Если текущий токен - число, добавляем его в стек
+            double operand = atof(buffer);
+            push(&operandStack, operand);
+        } else {
+            // Если текущий токен - оператор, выполняем соответствующую операцию
+            double operand2 = pop(&operandStack);
+            double operand1 = pop(&operandStack);
 
-    // Создание нового стека
-    struct Stack* stack = createStack();
-
-    char c;
-    while ((c = fgetc(file)) != EOF) {
-        if (isdigit(c)) {
-            push(stack, c - '0');  // Преобразование символа в число и добавление в стек
-        } else if (c == '+' || c == '-' || c == '*' || c == '/') {
-            int operand2 = pop(stack);  // Извлечение двух операндов из стека
-            int operand1 = pop(stack);
-
-            // Выполнение операции в зависимости от символа
-            switch (c) {
+            switch (buffer[0]) {
                 case '+':
-                    push(stack, operand1 + operand2);
+                    push(&operandStack, operand1 + operand2);
                     break;
                 case '-':
-                    push(stack, operand1 - operand2);
+                    push(&operandStack, operand1 - operand2);
                     break;
                 case '*':
-                    push(stack, operand1 * operand2);
+                    push(&operandStack, operand1 * operand2);
                     break;
                 case '/':
-                    push(stack, operand1 / operand2);
+                    if (operand2 != 0) {
+                        push(&operandStack, operand1 / operand2);
+                    } else {
+                        // Обработка ошибки: деление на ноль
+                        printf("Ошибка: Деление на ноль\n");
+                        exit(EXIT_FAILURE);
+                    }
                     break;
+                default:
+                    // Обработка ошибки: неизвестный оператор
+                    printf("Ошибка: Неизвестный оператор\n");
+                    exit(EXIT_FAILURE);
             }
         }
     }
 
-    fclose(file);
+    // Получаем результат из верхнего элемента стека
+    double result = pop(&operandStack);
 
-    // Печать результата, если стек не пустой
-    if (stack->top != NULL) {
-        int result = pop(stack);
-        printf("Result: %d\n", result);
-    } else {
-        printf("Error: Stack is empty\n");
+    // Проверяем, что стек пуст после вычислений
+    if (!isStackEmpty(&operandStack)) {
+        // Обработка ошибки: остались элементы в стеке
+        printf("Ошибка: Некорректное выражение\n");
+        exit(EXIT_FAILURE);
     }
 
-    // Освобождение памяти, выделенной под стек
-    free(stack);
+    return result;
+}
+
+int main() {
+    FILE* inputFile = fopen("input.txt", "r");
+    if (inputFile == NULL) {
+        // Обработка ошибки: не удалось открыть файл
+        printf("Ошибка: Не удалось открыть файл\n");
+        return 1;
+    }
+
+    double result = evaluatePostfixExpression(inputFile);
+
+    printf("Результат вычислений: %lf\n", result);
+
+    fclose(inputFile);
 
     return 0;
 }
